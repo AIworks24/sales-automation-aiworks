@@ -1,14 +1,11 @@
-'use client';
-
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types';
 
-let client: ReturnType<typeof createClient<Database>> | null = null;
+let browserClient: any = null;
 
-// Browser client for use in Client Components (singleton pattern)
 export const createBrowserClient = () => {
-  if (client) {
-    return client;
+  if (browserClient) {
+    return browserClient;
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,6 +15,12 @@ export const createBrowserClient = () => {
     throw new Error('Missing Supabase environment variables');
   }
 
-  client = createClient<Database>(supabaseUrl, supabaseAnonKey);
-  return client;
+  browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  });
+  
+  return browserClient;
 };

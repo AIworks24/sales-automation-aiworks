@@ -10,11 +10,11 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [role, setRole] = useState<'admin' | 'manager' | 'rep'>('admin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createBrowserClient();
-  const [role, setRole] = useState<'admin' | 'manager' | 'rep'>('admin');
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,35 +26,44 @@ export default function SignupPage() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: role,
+            company_name: companyName,
+          },
+        },
       });
 
       if (authError) throw authError;
       if (!authData.user) throw new Error('User creation failed');
 
-      console.log('User created:', authData.user.id);
+      console.log('✅ User created:', authData.user.id);
 
-      // Step 2: Wait for trigger to create profile
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait for trigger
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Step 3: Create company - cast the result properly
-      const companyInsert: any = await (supabase as any)
-        .from('companies')
-        .insert([{ name: companyName }])
+      // Step 2: Create company
+      const { data: companyData, error: companyError } = await (supabase
+        .from('companies') as any)
+        .insert([{ 
+          name: companyName,
+          subscription_tier: 'professional',
+          subscription_status: 'trial'
+        }])
         .select('id')
         .single();
 
-      if (companyInsert.error) {
-        console.error('Company error:', companyInsert.error);
-        throw new Error('Failed to create company: ' + companyInsert.error.message);
+      if (companyError) {
+        console.error('❌ Company error:', companyError);
+        throw new Error(`Failed to create company: ${companyError.message}`);
       }
 
-      const companyId: string = companyInsert.data.id;
-      if (!companyId) throw new Error('Company creation returned no ID');
+      const companyId = companyData.id;
+      console.log('✅ Company created:', companyId);
 
-      console.log('Company created:', companyId);
-
-      // Step 4: Update user profile - cast to bypass type checking
-      const profileUpdate = await (supabase
+      // Step 3: Update profile
+      const { data: profileData, error: profileError } = await (supabase
         .from('user_profiles') as any)
         .update({
           company_id: companyId,
@@ -65,18 +74,19 @@ export default function SignupPage() {
         .select()
         .single();
 
-      if (profileUpdate.error) {
-        console.error('Profile update error:', profileUpdate.error);
-        throw new Error('Failed to update profile: ' + profileUpdate.error.message);
+      if (profileError) {
+        console.error('❌ Profile error:', profileError);
+        throw new Error(`Failed to update profile: ${profileError.message}`);
       }
 
-      console.log('Profile updated:', profileUpdate.data);
+      console.log('✅ Profile updated:', profileData);
+      console.log('✅ Signup complete! Redirecting to dashboard...');
 
-      // Success! Redirect to dashboard
+      // Success! User is already logged in, go straight to dashboard
       router.push('/dashboard');
       
     } catch (err: any) {
-      console.error('Signup error:', err);
+      console.error('❌ Signup error:', err);
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
@@ -140,7 +150,7 @@ export default function SignupPage() {
 
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                Role
+                Your Role
               </label>
               <select
                 id="role"
@@ -151,8 +161,8 @@ export default function SignupPage() {
                 className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
               >
                 <option value="admin">Admin - Full Access</option>
-                <option value="manager">Manager - Campaign & Team Management</option>
-                <option value="rep">Sales Rep - Assigned Prospects Only</option>
+                <option value="manager">Manager - Campaign Management</option>
+                <option value="rep">Sales Rep - Assigned Prospects</option>
               </select>
             </div>
 
