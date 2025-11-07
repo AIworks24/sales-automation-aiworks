@@ -1,113 +1,137 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+function createServerClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(supabaseUrl, supabaseAnonKey);
+}
+
+function getTokenFromCookies(request: NextRequest): string | null {
+  const cookies = request.cookies;
+  
+  for (const cookie of cookies.getAll()) {
+    if (cookie.name.includes('auth-token') && !cookie.name.includes('code-verifier')) {
+      let cookieValue = cookie.value;
+      
+      if (cookieValue.startsWith('base64-')) {
+        try {
+          const base64String = cookieValue.substring(7);
+          cookieValue = Buffer.from(base64String, 'base64').toString('utf-8');
+        } catch (e) {
+          return null;
+        }
+      }
+      
+      try {
+        const parsed = JSON.parse(cookieValue);
+        if (parsed.access_token) return parsed.access_token;
+        if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+      } catch (e) {
+        return cookieValue;
+      }
+    }
+  }
+  
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const token = getTokenFromCookies(request);
 
-    if (!session) {
+    if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's company_id and role
-    const profileResult = await (supabase
-      .from('user_profiles') as any)
+    const supabase = createServerClient();
+    const userResult = await supabase.auth.getUser(token);
+    const user = (userResult.data as any).user;
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const profileResult = await supabase
+      .from('user_profiles')
       .select('company_id, role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
-    if (profileResult.error || !profileResult.data) {
+    const profileData = profileResult.data as any;
+
+    if (profileResult.error || !profileData) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const companyId = profileResult.data.company_id;
+    const companyId = profileData.company_id;
 
-    // Get total prospects
-    const prospectsResult = await (supabase
-      .from('prospects') as any)
+    const prospectsResult = await supabase
+      .from('prospects')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId);
 
-    const totalProspects = prospectsResult.count || 0;
-
-    // Get active campaigns
-    const campaignsResult = await (supabase
-      .from('campaigns') as any)
+    const campaignsResult = await supabase
+      .from('campaigns')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('status', 'active');
 
-    const activeCampaigns = campaignsResult.count || 0;
-
-    // Get messages sent today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const messagesResult = await (supabase
-      .from('messages') as any)
+    const messagesResult = await supabase
+      .from('messages')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .gte('created_at', today.toISOString());
 
-    const messagesToday = messagesResult.count || 0;
-
-    // Get response rate (responded prospects / contacted prospects)
-    const contactedResult = await (supabase
-      .from('prospects') as any)
+    const contactedResult = await supabase
+      .from('prospects')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .in('status', ['contacted', 'responded', 'meeting_booked', 'converted']);
 
-    const contactedCount = contactedResult.count || 0;
-
-    const respondedResult = await (supabase
-      .from('prospects') as any)
+    const respondedResult = await supabase
+      .from('prospects')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .in('status', ['responded', 'meeting_booked', 'converted']);
 
+    const contactedCount = contactedResult.count || 0;
     const respondedCount = respondedResult.count || 0;
 
     const responseRate = contactedCount > 0
       ? Math.round((respondedCount / contactedCount) * 100)
       : 0;
 
-    // Get meetings booked this week
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const meetingsResult = await (supabase
-      .from('prospects') as any)
+    const meetingsResult = await supabase
+      .from('prospects')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('status', 'meeting_booked')
       .gte('updated_at', weekAgo.toISOString());
 
-    const meetingsBooked = meetingsResult.count || 0;
-
-    // Get conversions
-    const conversionsResult = await (supabase
-      .from('prospects') as any)
+    const conversionsResult = await supabase
+      .from('prospects')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('status', 'converted');
 
-    const conversions = conversionsResult.count || 0;
-
-    // Get recent campaigns (last 5)
-    const recentCampaignsResult = await (supabase
-      .from('campaigns') as any)
+    const recentCampaignsResult = await supabase
+      .from('campaigns')
       .select('id, name, status, created_at')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(5);
 
-    const recentCampaigns = recentCampaignsResult.data || [];
+    const recentCampaigns = (recentCampaignsResult.data as any) || [];
 
-    // Get prospect count for each campaign
     const campaignsWithCounts = await Promise.all(
       recentCampaigns.map(async (campaign: any) => {
-        const result = await (supabase
-          .from('prospects') as any)
+        const result = await supabase
+          .from('prospects')
           .select('*', { count: 'exact', head: true })
           .eq('campaign_id', campaign.id);
 
@@ -118,25 +142,24 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Get recent prospects (last 5)
-    const recentProspectsResult = await (supabase
-      .from('prospects') as any)
+    const recentProspectsResult = await supabase
+      .from('prospects')
       .select('id, first_name, last_name, full_name, title, company, status, created_at')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(5);
 
-    const recentProspects = recentProspectsResult.data || [];
+    const recentProspects = (recentProspectsResult.data as any) || [];
 
     return NextResponse.json({
       success: true,
       data: {
-        total_prospects: totalProspects,
-        active_campaigns: activeCampaigns,
-        messages_sent_today: messagesToday,
+        total_prospects: prospectsResult.count || 0,
+        active_campaigns: campaignsResult.count || 0,
+        messages_sent_today: messagesResult.count || 0,
         response_rate: responseRate,
-        meetings_booked: meetingsBooked,
-        conversions: conversions,
+        meetings_booked: meetingsResult.count || 0,
+        conversions: conversionsResult.count || 0,
         recent_campaigns: campaignsWithCounts,
         recent_prospects: recentProspects,
       },
@@ -144,10 +167,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to fetch dashboard stats',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { error: 'Failed to fetch dashboard stats' },
       { status: 500 }
     );
   }
