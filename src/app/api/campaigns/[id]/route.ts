@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { getAuthenticatedUser } from '@/lib/auth-helpers';
 
-// GET /api/campaigns/[id] - Get single campaign
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error, supabase } = await getAuthenticatedUser(request);
+    
+    if (error || !user) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
-    const campaignResult = await (supabase
-      .from('campaigns') as any)
+    const campaignResult = await supabase
+      .from('campaigns')
       .select('*')
       .eq('id', params.id)
       .single();
@@ -40,41 +38,22 @@ export async function GET(
   }
 }
 
-// PUT /api/campaigns/[id] - Update campaign
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error, supabase } = await getAuthenticatedUser(request);
+    
+    if (error || !user) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const {
-      name,
-      description,
-      message_template,
-      target_criteria,
-      ai_personalization_enabled,
-      daily_contact_limit,
-      status,
-    } = body;
 
-    const updateResult = await (supabase
-      .from('campaigns') as any)
-      .update({
-        name,
-        description,
-        message_template,
-        target_criteria,
-        ai_personalization_enabled,
-        daily_contact_limit,
-        status,
-      })
+    const updateResult = await supabase
+      .from('campaigns')
+      .update(body)
       .eq('id', params.id)
       .select()
       .single();
@@ -97,35 +76,19 @@ export async function PUT(
   }
 }
 
-// DELETE /api/campaigns/[id] - Delete campaign
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error, supabase } = await getAuthenticatedUser(request);
+    
+    if (error || !user) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user has permission (admin/manager)
-    const profileResult = await (supabase
-      .from('user_profiles') as any)
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profileResult.data?.role === 'rep') {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
-    }
-
-    const deleteResult = await (supabase
-      .from('campaigns') as any)
+    const deleteResult = await supabase
+      .from('campaigns')
       .delete()
       .eq('id', params.id);
 

@@ -1,55 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function createServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(supabaseUrl, supabaseAnonKey);
-}
-
-function getTokenFromCookies(request: NextRequest): string | null {
-  const cookies = request.cookies;
-  
-  for (const cookie of cookies.getAll()) {
-    if (cookie.name.includes('auth-token') && !cookie.name.includes('code-verifier')) {
-      let cookieValue = cookie.value;
-      
-      if (cookieValue.startsWith('base64-')) {
-        try {
-          const base64String = cookieValue.substring(7);
-          cookieValue = Buffer.from(base64String, 'base64').toString('utf-8');
-        } catch (e) {
-          return null;
-        }
-      }
-      
-      try {
-        const parsed = JSON.parse(cookieValue);
-        if (parsed.access_token) return parsed.access_token;
-        if (Array.isArray(parsed) && parsed[0]) return parsed[0];
-      } catch (e) {
-        return cookieValue;
-      }
-    }
-  }
-  
-  return null;
-}
+import { getAuthenticatedUser } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = getTokenFromCookies(request);
-
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const supabase = createServerClient();
-    const userResult = await supabase.auth.getUser(token);
-    const user = (userResult.data as any).user;
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error, supabase } = await getAuthenticatedUser(request);
+    
+    if (error || !user) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
     const profileResult = await supabase
