@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Play, Pause, Edit, Trash2, CheckCircle, MoreVertical } from 'lucide-react';
+import { Play, Pause, Edit, Trash2, CheckCircle, Search } from 'lucide-react';
 import { usePermissions } from '@/hooks/userpermissions';
 
 interface CampaignHeaderProps {
@@ -13,7 +13,6 @@ interface CampaignHeaderProps {
 
 export default function CampaignHeader({ campaign, onStatusChange, onDelete }: CampaignHeaderProps) {
   const [loading, setLoading] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const { can } = usePermissions();
 
   const handleStatusChange = async (newStatus: string) => {
@@ -22,7 +21,6 @@ export default function CampaignHeader({ campaign, onStatusChange, onDelete }: C
       await onStatusChange(newStatus);
     } finally {
       setLoading(false);
-      setMenuOpen(false);
     }
   };
 
@@ -48,7 +46,7 @@ export default function CampaignHeader({ campaign, onStatusChange, onDelete }: C
         <div className="flex-1">
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold text-gray-900">{campaign.name}</h1>
-            <span className={`rounded-full border px-4 py-1 text-sm font-medium capitalize ${getStatusColor(campaign.status)}`}>
+            <span className={'rounded-full border px-4 py-1 text-sm font-medium capitalize ' + getStatusColor(campaign.status)}>
               {campaign.status}
             </span>
           </div>
@@ -65,6 +63,15 @@ export default function CampaignHeader({ campaign, onStatusChange, onDelete }: C
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Discover Prospects Button */}
+          <Link
+            href={'/campaigns/' + campaign.id + '/discover'}
+            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
+          >
+            <Search className="h-4 w-4" />
+            Discover Prospects
+          </Link>
+
           {/* Status Control Buttons */}
           {campaign.status === 'draft' && canEdit && (
             <button
@@ -113,7 +120,7 @@ export default function CampaignHeader({ campaign, onStatusChange, onDelete }: C
           {/* Edit Button */}
           {canEdit && (
             <Link
-              href={`/campaigns/${campaign.id}/edit`}
+              href={'/campaigns/' + campaign.id + '/edit'}
               className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
             >
               <Edit className="h-4 w-4" />

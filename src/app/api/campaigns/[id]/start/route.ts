@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { getAuthenticatedUser } from '@/lib/auth-helpers';
 
-// POST /api/campaigns/[id]/start - Start campaign
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error, supabase } = await getAuthenticatedUser(request);
+    
+    if (error || !user) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
-    // Update campaign status to active
-    const updateResult = await (supabase
-      .from('campaigns') as any)
+    const updateResult = await supabase
+      .from('campaigns')
       .update({
         status: 'active',
         started_at: new Date().toISOString(),
