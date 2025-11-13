@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth-helpers';
-import { searchLinkedInProspects } from '@/lib/scrapingdog/search';
+import { searchLinkedInProspects } from '@/lib/apollo/search';
 
 export async function POST(
   request: NextRequest,
