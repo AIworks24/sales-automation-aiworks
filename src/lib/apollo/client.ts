@@ -16,13 +16,30 @@ interface ApolloContact {
   title: string;
   organization?: {
     name: string;
+    industry?: string;
+    website_url?: string;
+    phone?: string;
+    primary_phone?: {
+      number: string;
+      sanitized_number: string;
+    };
   };
   city: string;
   state: string;
   country: string;
   linkedin_url: string;
   email?: string;
+  email_status?: string;
   phone?: string;
+  phone_numbers?: Array<{
+    raw_number: string;
+    sanitized_number: string;
+    type: string;
+  }>;
+  photo_url?: string;
+  headline?: string;
+  twitter_url?: string;
+  facebook_url?: string;
 }
 
 export class ApolloClient {
@@ -36,37 +53,31 @@ export class ApolloClient {
   async searchPeople(params: ApolloSearchParams): Promise<ApolloContact[]> {
     try {
       console.log('========================================');
-      console.log('Apollo.io People Search');
+      console.log('Apollo.io People Search WITH EMAIL/PHONE REVEAL');
       console.log('Input params:', JSON.stringify(params, null, 2));
       console.log('========================================');
       
-      // Build the request body using CORRECT Apollo API parameters
+      // ✅ ADD REVEAL PARAMETERS TO UNLOCK EMAILS & PHONES!
       const requestBody: any = {
         per_page: Math.min(params.limit || 25, 100),
         page: 1,
+        reveal_personal_emails: true,  // ← UNLOCK EMAILS!
+        reveal_phone_number: true,     // ← UNLOCK PHONES!
       };
 
-      // Add person_titles if provided (CORRECT FORMAT)
       if (params.titles && params.titles.length > 0) {
         requestBody.person_titles = params.titles;
         console.log('✓ Job Titles:', params.titles);
       }
 
-      // Add person_locations if provided
-      // FORMAT: "City, State, Country" or "State, Country" or "Country"
-      // Example: "Richmond, Virginia, US" or "Virginia, US" or "United States"
       if (params.locations && params.locations.length > 0) {
-        // Convert locations to Apollo format
         const formattedLocations = params.locations.map(loc => {
-          // If location contains "VA", replace with "Virginia, US"
           if (loc.includes('VA') && !loc.includes('Virginia')) {
             return loc.replace(/,?\s*VA\s*/, ', Virginia, US');
           }
-          // If location doesn't end with country code, add "US"
           if (!loc.includes('US') && !loc.includes('USA') && !loc.includes('United States')) {
             return `${loc}, US`;
           }
-          // Replace "USA" with "US"
           return loc.replace(/\bUSA\b/g, 'US');
         });
         
@@ -74,14 +85,11 @@ export class ApolloClient {
         console.log('✓ Locations (formatted):', formattedLocations);
       }
 
-      // Add q_organization_keyword_tags for industries (CORRECT PARAMETER)
-      // This filters by company keywords/industries
       if (params.industries && params.industries.length > 0) {
         requestBody.q_organization_keyword_tags = params.industries;
         console.log('✓ Industry Keywords:', params.industries);
       }
 
-      // Add general keywords if provided
       if (params.keywords && params.keywords.length > 0) {
         requestBody.q_keywords = params.keywords.join(' ');
         console.log('✓ General Keywords:', params.keywords.join(' '));
@@ -89,7 +97,9 @@ export class ApolloClient {
 
       console.log('\n📤 Final API Request Body:');
       console.log(JSON.stringify(requestBody, null, 2));
-      console.log('\n⏳ Calling Apollo.io API...\n');
+      console.log('🔑 Reveal Personal Emails: true');
+      console.log('🔑 Reveal Phone Numbers: true');
+      console.log('\n⏳ Calling Apollo.io API (this will consume credits)...\n');
 
       const response = await axios.post(
         `${this.baseUrl}/mixed_people/search`,
@@ -121,30 +131,26 @@ export class ApolloClient {
         console.log('  Name:', people[0].name || 'N/A');
         console.log('  Title:', people[0].title || 'N/A');
         console.log('  Company:', people[0].organization?.name || 'N/A');
+        console.log('  Email:', people[0].email || 'NOT AVAILABLE');
+        console.log('  Email Status:', people[0].email_status || 'N/A');
+        console.log('  Phone:', people[0].phone || people[0].phone_numbers?.[0]?.raw_number || 'NOT AVAILABLE');
+        console.log('  Industry:', people[0].organization?.industry || 'NOT AVAILABLE');
         const location = [people[0].city, people[0].state, people[0].country].filter(Boolean).join(', ');
         console.log('  Location:', location || 'N/A');
         console.log('  LinkedIn:', people[0].linkedin_url || 'N/A');
+        
+        // Check if email is real or locked
+        if (people[0].email && people[0].email.includes('email_not_unlocked')) {
+          console.log('\n⚠️  WARNING: Email still locked!');
+          console.log('Check:');
+          console.log('  1. Your Apollo plan includes email credits');
+          console.log('  2. You have credits remaining');
+          console.log('  3. API key has correct permissions');
+        } else if (people[0].email) {
+          console.log('\n✅ Real email captured! Credits consumed.');
+        }
       } else {
         console.log('\n⚠️  NO RESULTS FOUND');
-        console.log('\n💡 Troubleshooting Suggestions:');
-        console.log('─────────────────────────────────────');
-        console.log('1. Try broader job titles:');
-        console.log('   ❌ "COO" → ✅ "Operations" or "Executive"');
-        console.log('');
-        console.log('2. Try broader locations:');
-        console.log('   ❌ "Richmond, VA" → ✅ "Virginia, US" or "United States"');
-        console.log('');
-        console.log('3. Remove industry filters temporarily:');
-        console.log('   Test with just titles + location first');
-        console.log('');
-        console.log('4. Test in Apollo web interface:');
-        console.log('   Visit https://app.apollo.io/people');
-        console.log('   Try same filters to verify people exist');
-        console.log('');
-        console.log('5. Common working examples:');
-        console.log('   • Title: "CEO" + Location: "United States"');
-        console.log('   • Title: "Operations" + Location: "Virginia, US"');
-        console.log('   • Title: "Director" + Location: "United States"');
       }
       console.log('========================================\n');
 
@@ -161,20 +167,6 @@ export class ApolloClient {
         console.error('Status Code:', error.response.status);
         console.error('Status Text:', error.response.statusText);
         console.error('Error Data:', JSON.stringify(error.response.data, null, 2));
-        
-        if (error.response.status === 401) {
-          console.error('\n🔑 Authentication Error:');
-          console.error('Your API key may be invalid or expired.');
-          console.error('Check: https://app.apollo.io/#/settings/api-keys');
-        } else if (error.response.status === 403) {
-          console.error('\n🚫 Permission Error:');
-          console.error('Your plan may not have access to this endpoint.');
-          console.error('Upgrade: https://www.apollo.io/pricing');
-        } else if (error.response.status === 429) {
-          console.error('\n⏱️  Rate Limit Error:');
-          console.error('You have exceeded your API rate limit.');
-          console.error('Wait a moment and try again.');
-        }
       }
       
       console.error('========================================\n');

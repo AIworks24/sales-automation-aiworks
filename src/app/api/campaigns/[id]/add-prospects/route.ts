@@ -12,7 +12,6 @@ export async function POST(
       return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's company_id
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('company_id')
@@ -23,7 +22,6 @@ export async function POST(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Get campaign to verify it exists
     const { data: campaign, error: campaignError } = await supabase
       .from('campaigns')
       .select('id, name')
@@ -46,11 +44,17 @@ export async function POST(
 
     console.log(`\n📥 Adding ${prospects.length} prospects to campaign: ${campaign.name}`);
 
-    // Prepare prospects for bulk insert
+    // Prepare prospects for bulk insert - SAVE ALL DATA FROM SEARCH RESULTS
     const prospectsToInsert = prospects.map((p: any) => {
       const nameParts = p.name.split(' ');
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Log what we're receiving
+      console.log(`\n👤 Processing: ${p.name}`);
+      console.log(`   Email: ${p.email || 'NOT PROVIDED'}`);
+      console.log(`   Phone: ${p.phone || 'NOT PROVIDED'}`);
+      console.log(`   Industry: ${p.industry || 'NOT PROVIDED'}`);
 
       return {
         company_id: profile.company_id,
@@ -61,15 +65,16 @@ export async function POST(
         full_name: p.name,
         title: p.title || '',
         company: p.company || '',
-        industry: '',
+        industry: p.industry || null,  // Save from search results
         location: p.location || '',
-        email: null,
-        phone: null,
+        email: p.email || null,        // Save from search results
+        phone: p.phone || null,        // Save from search results
         status: 'new',
+        notes: p.headline || `${p.title} at ${p.company}`,
       };
     });
 
-    console.log('Sample prospect to insert:', prospectsToInsert[0]);
+    console.log('\n📊 Sample prospect to insert:', JSON.stringify(prospectsToInsert[0], null, 2));
 
     // Bulk insert prospects
     const { data: insertedProspects, error: insertError } = await supabase
@@ -80,7 +85,6 @@ export async function POST(
     if (insertError) {
       console.error('❌ Error inserting prospects:', insertError);
       
-      // Check if it's a duplicate key error
       if (insertError.code === '23505') {
         return NextResponse.json({
           success: false,
@@ -93,6 +97,22 @@ export async function POST(
     }
 
     console.log(`✅ Successfully added ${insertedProspects.length} prospects`);
+
+    // Log what was actually saved
+    if (insertedProspects.length > 0) {
+      console.log('\n📊 VERIFICATION - What was saved to Supabase:');
+      console.log('──────────────────────────────────────');
+      const sample = insertedProspects[0];
+      console.log('Name:', sample.full_name);
+      console.log('Email:', sample.email || '❌ NULL');
+      console.log('Phone:', sample.phone || '❌ NULL');
+      console.log('Industry:', sample.industry || '❌ NULL');
+      console.log('──────────────────────────────────────\n');
+    }
+
+    // ❌ REMOVED BROKEN ENRICHMENT
+    // The enrichment was failing because we were using LinkedIn usernames
+    // instead of Apollo IDs. The search results already contain the data!
 
     return NextResponse.json({
       success: true,
