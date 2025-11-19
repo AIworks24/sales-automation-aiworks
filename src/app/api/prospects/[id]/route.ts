@@ -41,16 +41,14 @@ export async function GET(
     let enrichedData: Record<string, any> = {};
     
     // Try to enrich with Apollo data if we have a LinkedIn URL
-    if (prospect.linkedin_url) {
+    if (prospect.apollo_id) {
       try {
-        const linkedinId = extractLinkedInId(prospect.linkedin_url);
+        console.log(`🔍 Fetching enriched data for: ${prospect.full_name}`);
+        console.log(`📍 Using Apollo ID: ${prospect.apollo_id}`);
+        const apollo = createApolloClient();
         
-        if (linkedinId) {
-          console.log(`🔍 Fetching enriched data for: ${prospect.full_name}`);
-          const apollo = createApolloClient();
-          
-          // Get full contact details from Apollo - returns type 'any'
-          const apolloContact: any = await apollo.getContactById(linkedinId);
+        // Get full contact details from Apollo - returns type 'any'
+        const apolloContact: any = await apollo.getContactById(prospect.apollo_id);
           
           // Safely extract data with type checks
           enrichedData = {
@@ -287,7 +285,5 @@ export async function DELETE(
 
 // Helper function to extract LinkedIn ID from URL
 function extractLinkedInId(linkedinUrl: string): string | null {
-  if (!linkedinUrl) return null;
-  const match = linkedinUrl.match(/linkedin\.com\/in\/([^\/\?]+)/);
-  return match ? match[1] : null;
+  return null;
 }

@@ -68,7 +68,8 @@ export async function POST(
         industry: p.industry || null,  // Save from search results
         location: p.location || '',
         email: p.email || null,        // Save from search results
-        phone: p.phone || null,        // Save from search results
+        phone: p.phone || null,
+        apollo_id: p.apolloId || null,        // Save from search results
         status: 'new',
         notes: p.headline || `${p.title} at ${p.company}`,
       };

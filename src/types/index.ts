@@ -73,6 +73,7 @@ export interface Prospect {
   campaign_id: string;
   company_id: string;
   linkedin_url: string;
+  apollo_id?: string;
   first_name: string;
   last_name: string;
   full_name: string;

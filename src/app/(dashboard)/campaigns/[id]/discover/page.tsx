@@ -14,6 +14,7 @@ export default function DiscoverProspectsPage() {
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [addingProspects, setAddingProspects] = useState(false);
+  const [enrichLimit, setEnrichLimit] = useState<number>(10); // NEW: Enrichment limit state
   const campaignId = params.id as string;
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export default function DiscoverProspectsPage() {
     try {
       const response = await fetch('/api/campaigns/' + campaignId + '/discover-prospects', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, // NEW: Added headers
+        body: JSON.stringify({
+          enrichLimit: enrichLimit, // NEW: Send enrichment limit
+        }),
       });
       const data = await response.json();
       
@@ -76,7 +81,6 @@ export default function DiscoverProspectsPage() {
     const selectedData = Array.from(selectedProspects).map(index => prospects[index]);
     
     console.log(`📤 Adding ${selectedData.length} prospects...`);
-    console.log(`📍 Endpoint: /api/campaigns/${campaignId}/add-prospects`);
     
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/add-prospects`, {
@@ -87,9 +91,7 @@ export default function DiscoverProspectsPage() {
         }),
       });
 
-      console.log('📥 Response status:', response.status);
       const data = await response.json();
-      console.log('📦 Response data:', data);
 
       if (data.success) {
         alert(`✅ Successfully added ${data.count} prospects to campaign!`);
@@ -175,6 +177,42 @@ export default function DiscoverProspectsPage() {
           </div>
         </div>
 
+        {/* NEW: Enrichment Control Section */}
+        <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="mb-3">
+            <label htmlFor="enrichLimit" className="block text-sm font-medium text-gray-900 mb-2">
+              Email/Phone Enrichment Limit
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="number"
+                id="enrichLimit"
+                min="0"
+                max="100"
+                value={enrichLimit}
+                onChange={(e) => setEnrichLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-24 rounded-md border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">contacts to enrich</span>
+            </div>
+          </div>
+          
+          <div className="space-y-2 text-sm">
+            <p className="text-gray-700">
+              <strong>Search</strong> will find prospects (FREE) with locked emails
+            </p>
+            <p className="text-gray-700">
+              <strong>Enrich</strong> will reveal <span className="font-semibold">{enrichLimit}</span> real emails/phones
+            </p>
+            <p className="text-blue-700 font-medium">
+              💰 Cost: {enrichLimit} Apollo credits (1 per contact)
+            </p>
+            <p className="text-xs text-gray-600">
+              Tip: Set to 0 to only search (FREE). You can enrich later from the Prospects page.
+            </p>
+          </div>
+        </div>
+
         <button onClick={discoverProspects} disabled={discovering} className="mt-6 flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 disabled:opacity-50">
           {discovering ? (
             <>
@@ -193,7 +231,14 @@ export default function DiscoverProspectsPage() {
       {prospects.length > 0 && (
         <div className="rounded-lg bg-white p-6 shadow">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Found {prospects.length} Prospects</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Found {prospects.length} Prospects</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {enrichLimit > 0 
+                  ? `First ${Math.min(enrichLimit, prospects.length)} enriched with real emails/phones`
+                  : 'All prospects have locked emails (set enrichment limit to reveal)'}
+              </p>
+            </div>
             {selectedProspects.size > 0 && (
               <button onClick={addSelectedProspects} disabled={addingProspects} className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50">
                 {addingProspects ? (
@@ -211,16 +256,42 @@ export default function DiscoverProspectsPage() {
             )}
           </div>
           <div className="space-y-3">
-            {prospects.map((prospect: any, index: number) => (
-              <div key={index} className={'flex items-center gap-4 rounded-lg border p-4 cursor-pointer transition-colors ' + (selectedProspects.has(index) ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50')} onClick={() => toggleProspect(index)}>
-                <input type="checkbox" checked={selectedProspects.has(index)} onChange={() => toggleProspect(index)} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{prospect.name}</p>
-                  <p className="text-sm text-gray-600">{prospect.title}</p>
-                  <p className="text-sm text-gray-500">{prospect.company} • {prospect.location}</p>
+            {prospects.map((prospect: any, index: number) => {
+              const isEnriched = index < enrichLimit && prospect.email && !prospect.email.includes('email_not_unlocked');
+              
+              return (
+                <div 
+                  key={index} 
+                  className={'flex items-center gap-4 rounded-lg border p-4 cursor-pointer transition-colors ' + (selectedProspects.has(index) ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50')} 
+                  onClick={() => toggleProspect(index)}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={selectedProspects.has(index)} 
+                    onChange={() => toggleProspect(index)} 
+                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900">{prospect.name}</p>
+                      {isEnriched && (
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          ✓ Enriched
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600">{prospect.title}</p>
+                    <p className="text-sm text-gray-500">{prospect.company} • {prospect.location}</p>
+                    {isEnriched && prospect.email && (
+                      <p className="text-xs text-green-600 mt-1">📧 {prospect.email}</p>
+                    )}
+                    {!isEnriched && (
+                      <p className="text-xs text-gray-400 mt-1">🔒 Email locked (not enriched)</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

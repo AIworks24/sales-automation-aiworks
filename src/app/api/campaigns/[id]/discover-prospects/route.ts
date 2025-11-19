@@ -33,6 +33,7 @@ export async function POST(
       locations: targetCriteria.locations || [],
       keywords: targetCriteria.keywords || [],
       limit: 50,
+      enrichLimit: 10,
     });
 
     return NextResponse.json({
