@@ -43,18 +43,27 @@ export async function POST(
     }
 
     console.log(`\n📥 Adding ${prospects.length} prospects to campaign: ${campaign.name}`);
+    
+    // ✅ DEBUG: Log what we received from frontend
+    console.log(`\n📋 Sample prospect received from frontend:`);
+    console.log(JSON.stringify(prospects[0], null, 2));
 
-    // Prepare prospects for bulk insert - SAVE ALL DATA FROM SEARCH RESULTS
+    // Prepare prospects for bulk insert
     const prospectsToInsert = prospects.map((p: any) => {
       const nameParts = p.name.split(' ');
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      // Log what we're receiving
-      console.log(`\n👤 Processing: ${p.name}`);
-      console.log(`   Email: ${p.email || 'NOT PROVIDED'}`);
-      console.log(`   Phone: ${p.phone || 'NOT PROVIDED'}`);
-      console.log(`   Industry: ${p.industry || 'NOT PROVIDED'}`);
+      // ✅ FIXED: SearchResult already has email extracted properly
+      // Just use p.email directly - it's already been processed by search.ts
+      const email = p.email || null;
+      const phone = p.phone || null;
+      const industry = p.industry || null;
+
+      console.log(`\n👤 ${p.name}`);
+      console.log(`   email from frontend: ${email || '❌ NONE'}`);
+      console.log(`   phone from frontend: ${phone || '❌ NONE'}`);
+      console.log(`   industry from frontend: ${industry || '❌ NONE'}`);
 
       return {
         company_id: profile.company_id,
@@ -65,17 +74,18 @@ export async function POST(
         full_name: p.name,
         title: p.title || '',
         company: p.company || '',
-        industry: p.industry || null,  // Save from search results
+        industry: industry,
         location: p.location || '',
-        email: p.email || null,        // Save from search results
-        phone: p.phone || null,
-        apollo_id: p.apolloId || null,        // Save from search results
+        email: email,  // ✅ Direct from SearchResult
+        phone: phone,  // ✅ Direct from SearchResult
+        apollo_id: p.apolloId || null,
         status: 'new',
         notes: p.headline || `${p.title} at ${p.company}`,
       };
     });
 
-    console.log('\n📊 Sample prospect to insert:', JSON.stringify(prospectsToInsert[0], null, 2));
+    console.log('\n📊 Sample to insert into database:');
+    console.log(JSON.stringify(prospectsToInsert[0], null, 2));
 
     // Bulk insert prospects
     const { data: insertedProspects, error: insertError } = await supabase
@@ -84,7 +94,7 @@ export async function POST(
       .select();
 
     if (insertError) {
-      console.error('❌ Error inserting prospects:', insertError);
+      console.error('❌ Insert error:', insertError);
       
       if (insertError.code === '23505') {
         return NextResponse.json({
@@ -97,38 +107,37 @@ export async function POST(
       throw insertError;
     }
 
-    console.log(`✅ Successfully added ${insertedProspects.length} prospects`);
+    console.log(`\n✅ Saved ${insertedProspects.length} prospects`);
 
-    // Log what was actually saved
+    // Verify
     if (insertedProspects.length > 0) {
-      console.log('\n📊 VERIFICATION - What was saved to Supabase:');
-      console.log('──────────────────────────────────────');
+      console.log('\n📊 VERIFICATION - What Supabase saved:');
       const sample = insertedProspects[0];
-      console.log('Name:', sample.full_name);
-      console.log('Email:', sample.email || '❌ NULL');
-      console.log('Phone:', sample.phone || '❌ NULL');
-      console.log('Industry:', sample.industry || '❌ NULL');
-      console.log('──────────────────────────────────────\n');
+      console.log(`   Name: ${sample.full_name}`);
+      console.log(`   Email: ${sample.email ?? '❌ NULL'}`);
+      console.log(`   Phone: ${sample.phone ?? '❌ NULL'}`);
+      console.log(`   Industry: ${sample.industry ?? '❌ NULL'}`);
+      
+      const withEmail = insertedProspects.filter((p: any) => p.email).length;
+      const withPhone = insertedProspects.filter((p: any) => p.phone).length;
+      console.log(`\n   📊 ${withEmail}/${insertedProspects.length} have emails`);
+      console.log(`   📊 ${withPhone}/${insertedProspects.length} have phones\n`);
     }
-
-    // ❌ REMOVED BROKEN ENRICHMENT
-    // The enrichment was failing because we were using LinkedIn usernames
-    // instead of Apollo IDs. The search results already contain the data!
 
     return NextResponse.json({
       success: true,
       data: insertedProspects,
       count: insertedProspects.length,
-      message: `Successfully added ${insertedProspects.length} prospects to campaign`,
+      message: `Successfully added ${insertedProspects.length} prospects`,
     });
 
   } catch (error: any) {
-    console.error('❌ Error adding prospects:', error);
+    console.error('❌ Error:', error);
     return NextResponse.json(
       {
         success: false,
         error: 'Failed to add prospects',
-        details: error.message || 'Unknown error',
+        details: error.message,
       },
       { status: 500 }
     );

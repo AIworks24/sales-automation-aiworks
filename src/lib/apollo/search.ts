@@ -148,6 +148,14 @@ export async function searchLinkedInProspects(
         phone = person.phone_numbers[0].raw_number || person.phone_numbers[0].sanitized_number;
       }
 
+      // ✅ FIX: Extract email - check BOTH email field AND personal_emails array
+      let email: string | undefined = undefined;
+      if (person.email && !person.email.includes('email_not_unlocked')) {
+        email = person.email;
+      } else if (person.personal_emails && Array.isArray(person.personal_emails) && person.personal_emails.length > 0) {
+        email = person.personal_emails[0];
+      }
+
       // Build location string
       const locationParts = [person.city, person.state, person.country].filter(Boolean);
       const location = locationParts.join(', ');
@@ -160,7 +168,7 @@ export async function searchLinkedInProspects(
         profileUrl: person.linkedin_url || '',
         headline: person.headline || person.title || '',
         photoUrl: person.photo_url,
-        email: person.email && !person.email.includes('email_not_unlocked') ? person.email : undefined,
+        email: email,  // ✅ Now extracts from personal_emails too
         phone: phone,
         industry: person.organization?.industry,
         apolloId: person.id,
@@ -218,6 +226,13 @@ function convertToSearchResults(apolloContacts: any[]): SearchResult[] {
       phone = person.phone_numbers[0].raw_number || person.phone_numbers[0].sanitized_number;
     }
 
+    let email: string | undefined = undefined;
+    if (person.email && !person.email.includes('email_not_unlocked')) {
+      email = person.email;
+    } else if (person.personal_emails && Array.isArray(person.personal_emails) && person.personal_emails.length > 0) {
+      email = person.personal_emails[0];
+    }
+    
     // Build location string
     const locationParts = [person.city, person.state, person.country].filter(Boolean);
     const location = locationParts.join(', ');

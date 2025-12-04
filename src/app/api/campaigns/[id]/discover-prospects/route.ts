@@ -26,6 +26,14 @@ export async function POST(
 
     const targetCriteria = campaign.target_criteria || {};
 
+    // ✅ FIX: Read enrichLimit from request body
+    const body = await request.json();
+    const enrichLimit = body.enrichLimit !== undefined ? body.enrichLimit : 10;
+
+    console.log(`\n🎯 Discovery Request:`);
+    console.log(`   Enrich Limit: ${enrichLimit}`);
+    console.log(`   Search Limit: 50\n`);
+
     // Search LinkedIn for matching prospects
     const prospects = await searchLinkedInProspects({
       titles: targetCriteria.titles || [],
@@ -33,8 +41,18 @@ export async function POST(
       locations: targetCriteria.locations || [],
       keywords: targetCriteria.keywords || [],
       limit: 50,
-      enrichLimit: 10,
+      enrichLimit: enrichLimit,  // ✅ Now uses the value from frontend!
     });
+
+    // ✅ DEBUG: Log what we're returning
+    console.log(`\n📤 Returning to frontend: ${prospects.length} prospects`);
+    if (prospects.length > 0) {
+      const enrichedCount = prospects.filter(p => p.email).length;
+      console.log(`   ${enrichedCount} have emails`);
+      console.log(`\n   Sample (${prospects[0].name}):`);
+      console.log(`      email: ${prospects[0].email || 'NONE'}`);
+      console.log(`      apolloId: ${prospects[0].apolloId}`);
+    }
 
     return NextResponse.json({
       success: true,
