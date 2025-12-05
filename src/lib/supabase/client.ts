@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient as createClient } from '@supabase/ssr';
 import type { Database } from '@/types';
 
 let browserClient: any = null;
@@ -15,12 +15,7 @@ export const createBrowserClient = () => {
     throw new Error('Missing Supabase environment variables');
   }
 
-  browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  });
+  browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
   
   return browserClient;
 };
