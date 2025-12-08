@@ -16,6 +16,9 @@ export default function CampaignForm({ initialData, onSubmit, loading }: Campaig
     message_template: initialData?.message_template || '',
     ai_personalization_enabled: initialData?.ai_personalization_enabled ?? true,
     daily_contact_limit: initialData?.daily_contact_limit || 20,
+    // NEW: AI Controls
+    ai_tone: initialData?.ai_tone || 'professional',
+    ai_max_length: initialData?.ai_max_length || 800,
     target_criteria: initialData?.target_criteria || {
       titles: [],
       industries: [],
@@ -27,7 +30,6 @@ export default function CampaignForm({ initialData, onSubmit, loading }: Campaig
   const [titleInput, setTitleInput] = useState('');
   const [industryInput, setIndustryInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
-  const [keywordInput, setKeywordInput] = useState('');
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({
@@ -106,10 +108,7 @@ export default function CampaignForm({ initialData, onSubmit, loading }: Campaig
       {/* Target Criteria */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-900">Target Criteria</h2>
-        <p className="text-sm text-gray-600">
-          Define who you want to reach with this campaign
-        </p>
-
+        
         {/* Job Titles */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
@@ -286,10 +285,68 @@ I noticed you're a {{title}} at {{company}}. I wanted to reach out because...
 Would you be open to a quick chat?"
           />
           <p className="mt-2 text-xs text-gray-500">
-            Use variables: {'{'}{'first_name}'},  {'{'}{'last_name}'},  {'{'}{'title}'},  {'{'}{'company}'}
+            Use variables: {'{'}first_name{'}'}, {'{'}last_name{'}'}, {'{'}title{'}'}, {'{'}company{'}'}
             {formData.ai_personalization_enabled && ' • AI will personalize each message based on prospect data'}
           </p>
         </div>
+
+        {/* NEW: AI CONTROLS */}
+        {formData.ai_personalization_enabled && (
+          <div className="mt-6 rounded-lg border-2 border-blue-100 bg-blue-50 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              AI Message Controls
+            </h3>
+            
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Tone Selection */}
+              <div>
+                <label htmlFor="ai_tone" className="block text-sm font-medium text-gray-700 mb-2">
+                  Message Tone
+                </label>
+                <select
+                  id="ai_tone"
+                  value={formData.ai_tone}
+                  onChange={(e) => handleChange('ai_tone', e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="professional">Professional - Formal and business-focused</option>
+                  <option value="casual">Casual - Friendly and approachable</option>
+                  <option value="enthusiastic">Enthusiastic - Energetic and excited</option>
+                  <option value="educational">Educational - Informative and helpful</option>
+                </select>
+              </div>
+
+              {/* Max Length */}
+              <div>
+                <label htmlFor="ai_max_length" className="block text-sm font-medium text-gray-700 mb-2">
+                  Max Message Length (characters)
+                </label>
+                <select
+                  id="ai_max_length"
+                  value={formData.ai_max_length}
+                  onChange={(e) => handleChange('ai_max_length', parseInt(e.target.value))}
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="500">500 - Very concise (2-3 paragraphs)</option>
+                  <option value="800">800 - Balanced (3-4 paragraphs)</option>
+                  <option value="1200">1200 - Detailed (4-5 paragraphs)</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Shorter messages typically get better response rates
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg bg-white p-4 border border-blue-200">
+              <p className="text-sm text-gray-700">
+                <strong>Preview:</strong> AI will generate{' '}
+                <span className="font-semibold text-blue-600">{formData.ai_tone}</span> messages{' '}
+                under <span className="font-semibold text-blue-600">{formData.ai_max_length}</span> characters
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Settings */}
@@ -310,7 +367,7 @@ Would you be open to a quick chat?"
             className="mt-1 block w-32 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-gray-500">
-            Maximum prospects to contact per day (recommended: 20-50 to stay LinkedIn-safe)
+            Maximum prospects to contact per day (recommended: 20-50 to stay safe)
           </p>
         </div>
       </div>

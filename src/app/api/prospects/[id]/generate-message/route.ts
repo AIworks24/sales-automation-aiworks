@@ -41,6 +41,20 @@ export async function POST(
       campaign = campaignData;
     }
 
+    // Get AI settings from campaign
+    const aiTone = campaign?.ai_tone || 'professional';
+    const aiMaxLength = campaign?.ai_max_length || 800;
+
+    // Tone descriptions
+    const toneDescriptions: Record<string, string> = {
+      professional: 'Professional and business-focused, formal yet friendly',
+      casual: 'Casual and approachable, conversational and relaxed',
+      enthusiastic: 'Enthusiastic and energetic, showing excitement and passion',
+      educational: 'Educational and helpful, informative and value-focused',
+    };
+
+    const toneDesc = toneDescriptions[aiTone] || toneDescriptions.professional;
+
     // Get user profile
     const { data: profile } = await supabase
       .from('user_profiles')
@@ -79,12 +93,14 @@ ${campaign?.message_template ? `Use this template as inspiration (but personaliz
 ${campaign.message_template}` : ''}
 
 Requirements:
-- Keep the email body under 300 words
+- Keep the email body STRICTLY under ${aiMaxLength} characters
+- Tone: ${toneDesc}
 - Reference their specific role and company
 - Sound natural and conversational, not robotic
 - Include a clear, soft call-to-action
-- Professional but approachable tone
 - Don't use overly salesy language
+
+IMPORTANT: The message must be under ${aiMaxLength} characters. Count carefully.
 
 Write ONLY the email body, no subject line. Start with "Hi ${prospect.first_name}," and end with a signature.`;
 

@@ -1,12 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles, Send, RefreshCw, Copy, Check, Zap, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Send, RefreshCw, Copy, Check, Zap, X, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface MessagePreviewProps {
   prospectId: string;
   prospectName: string;
   onSent?: () => void;
+}
+
+interface SavedMessage {
+  id: string;
+  content: string;
+  subject?: string;
+  created_at: string;
+  sent_at?: string;
+  variations?: string[];
 }
 
 export default function MessagePreview({ prospectId, prospectName, onSent }: MessagePreviewProps) {
@@ -20,6 +29,43 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
   const [copied, setCopied] = useState(false);
   const [variations, setVariations] = useState<string[]>([]);
   const [showVariations, setShowVariations] = useState(false);
+  
+  // NEW: Message history
+  const [messageHistory, setMessageHistory] = useState<SavedMessage[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load message history on mount
+  useEffect(() => {
+    loadMessageHistory();
+  }, [prospectId]);
+
+  const loadMessageHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch(`/api/prospects/${prospectId}/messages`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessageHistory(data.data);
+        
+        // If there's a recent unsent message, load it automatically
+        const recentUnsent = data.data.find((m: SavedMessage) => !m.sent_at);
+        if (recentUnsent) {
+          setMessage(recentUnsent.content);
+          setSubject(recentUnsent.subject || '');
+          setMessageId(recentUnsent.id);
+          if (recentUnsent.variations) {
+            setVariations(recentUnsent.variations);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading message history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const generateMessage = async () => {
     setLoading(true);
@@ -37,6 +83,9 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
         setMessage(data.data.message);
         setSubject(data.data.subject);
         setMessageId(data.data.message_id);
+        
+        // Reload history to show new message
+        await loadMessageHistory();
       } else {
         alert(data.error || 'Failed to generate message');
       }
@@ -62,7 +111,17 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
       const data = await response.json();
       
       if (data.success) {
-        setMessage(data.data.improved_message);
+        const improvedMessage = data.data.improved_message;
+        setMessage(improvedMessage);
+        
+        // Update the message in database
+        if (messageId) {
+          await fetch(`/api/messages/${messageId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: improvedMessage }),
+          });
+        }
       } else {
         alert(data.error || 'Failed to improve message');
       }
@@ -88,8 +147,23 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
       const data = await response.json();
       
       if (data.success) {
-        setVariations(data.data.variations);
+        const newVariations = data.data.variations;
+        setVariations(newVariations);
         setShowVariations(true);
+        
+        // Save variations to the message
+        if (messageId) {
+          await fetch(`/api/messages/${messageId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              variations: newVariations 
+            }),
+          });
+          
+          // Reload history
+          await loadMessageHistory();
+        }
       } else {
         alert(data.error || 'Failed to generate variations');
       }
@@ -114,7 +188,14 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
       
       if (data.success) {
         alert('Message marked as sent!');
+        await loadMessageHistory();
         onSent?.();
+        
+        // Clear current message to start fresh
+        setMessage('');
+        setSubject('');
+        setMessageId('');
+        setVariations([]);
       } else {
         alert(data.error || 'Failed to send message');
       }
@@ -135,10 +216,100 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
   const useVariation = (variation: string) => {
     setMessage(variation);
     setShowVariations(false);
+    
+    // Update message in database
+    if (messageId) {
+      fetch(`/api/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: variation }),
+      });
+    }
+  };
+
+  const loadPreviousMessage = (savedMessage: SavedMessage) => {
+    setMessage(savedMessage.content);
+    setSubject(savedMessage.subject || '');
+    setMessageId(savedMessage.id);
+    if (savedMessage.variations) {
+      setVariations(savedMessage.variations);
+    }
+    setShowHistory(false);
   };
 
   return (
     <div className="space-y-4">
+      {/* Message History */}
+      {messageHistory.length > 0 && (
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-gray-600" />
+              <span className="font-semibold text-gray-900">
+                Message History ({messageHistory.length})
+              </span>
+            </div>
+            {showHistory ? (
+              <ChevronUp className="h-5 w-5 text-gray-400" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-400" />
+            )}
+          </button>
+
+          {showHistory && (
+            <div className="mt-4 space-y-3">
+              {messageHistory.map((savedMsg) => (
+                <div
+                  key={savedMsg.id}
+                  className="rounded-lg border border-gray-300 bg-white p-4 hover:border-blue-400 cursor-pointer transition-colors"
+                  onClick={() => loadPreviousMessage(savedMsg)}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {savedMsg.sent_at ? (
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          ✓ Sent
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          Draft
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {new Date(savedMsg.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {savedMsg.content.length} chars
+                    </span>
+                  </div>
+                  
+                  {savedMsg.subject && (
+                    <p className="text-sm font-medium text-gray-900 mb-1">
+                      {savedMsg.subject}
+                    </p>
+                  )}
+                  
+                  <p className="text-sm text-gray-600 line-clamp-2">
+                    {savedMsg.content}
+                  </p>
+                  
+                  {savedMsg.variations && savedMsg.variations.length > 0 && (
+                    <div className="mt-2 text-xs text-blue-600">
+                      + {savedMsg.variations.length} variations saved
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Message Generator */}
       <div className="rounded-lg bg-white p-6 shadow">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           AI Message Generator for {prospectName}
@@ -165,14 +336,16 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
         ) : (
           <div className="space-y-4">
             {/* Subject Line */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Subject Line
-              </label>
-              <div className="rounded-lg bg-gray-50 px-4 py-2 border border-gray-200">
-                <p className="text-gray-900 font-medium">{subject}</p>
+            {subject && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Subject Line
+                </label>
+                <div className="rounded-lg bg-gray-50 px-4 py-2 border border-gray-200">
+                  <p className="text-gray-900 font-medium">{subject}</p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Message Body */}
             <div>
@@ -187,9 +360,9 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
             {/* Character Count */}
             <div className="flex items-center justify-between text-sm text-gray-600">
               <span>{message.length} characters</span>
-              {message.length > 500 && (
+              {message.length > 1200 && (
                 <span className="text-orange-600">
-                  ⚠ Consider shortening (ideal: under 500 characters)
+                  ⚠ Consider shortening (ideal: under 1200 characters)
                 </span>
               )}
             </div>
@@ -228,7 +401,7 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
                 className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 <Sparkles className={`h-4 w-4 ${generatingVariations ? 'animate-spin' : ''}`} />
-                {generatingVariations ? 'Creating...' : '3 Variations'}
+                {generatingVariations ? 'Creating...' : variations.length > 0 ? 'Regenerate Variations' : '3 Variations'}
               </button>
 
               <button
@@ -237,7 +410,7 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
                 className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Regenerate
+                New Message
               </button>
 
               <button
@@ -267,44 +440,46 @@ export default function MessagePreview({ prospectId, prospectName, onSent }: Mes
       </div>
 
       {/* Variations Panel */}
-      {showVariations && variations.length > 0 && (
+      {variations.length > 0 && (
         <div className="rounded-lg bg-white p-6 shadow border-2 border-blue-200">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-lg font-semibold text-gray-900">
-              3 Message Variations
+              3 Message Variations (Saved)
             </h4>
             <button
-              onClick={() => setShowVariations(false)}
-              className="text-gray-400 hover:text-gray-600"
+              onClick={() => setShowVariations(!showVariations)}
+              className="text-sm text-blue-600 hover:text-blue-700"
             >
-              <X className="h-5 w-5" />
+              {showVariations ? 'Hide' : 'Show'}
             </button>
           </div>
 
-          <div className="space-y-4">
-            {variations.map((variation, index) => (
-              <div
-                key={index}
-                className="rounded-lg border border-gray-200 p-4 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-colors"
-                onClick={() => useVariation(variation)}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-xs font-medium text-blue-600">
-                    Variation {index + 1}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {variation.length} chars
-                  </span>
+          {showVariations && (
+            <div className="space-y-4">
+              {variations.map((variation, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg border border-gray-200 p-4 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-colors"
+                  onClick={() => useVariation(variation)}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs font-medium text-blue-600">
+                      Variation {index + 1}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {variation.length} chars
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                    {variation}
+                  </p>
+                  <p className="mt-2 text-xs text-blue-600">
+                    Click to use this variation →
+                  </p>
                 </div>
-                <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                  {variation}
-                </p>
-                <p className="mt-2 text-xs text-blue-600">
-                  Click to use this variation →
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
